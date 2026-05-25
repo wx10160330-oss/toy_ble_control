@@ -469,7 +469,14 @@ a{color:#a78bfa}
       <li>填完按手机返回键让 nRF Connect 断开玩具，再回本页面点【连接玩具】</li>
     </ol>
     <div class="warn" style="margin-top:8px">
-      <b>提示</b>：如果你懒得装 nRF Connect，常见品牌的 Service UUID 头几位是固定的——Lovense 一般是 <code>5a30...</code> / <code>5300...</code> 开头；Lelo 是 <code>6e400001-...</code> （Nordic UART）；Kiiroo 是 <code>88f80001-...</code>。瞎填一个试试也行，反正错了浏览器就连不上服务，不会变砖。
+      <b>已知机型直接对号入座</b>：
+      <ul style="margin:4px 0 4px 22px">
+        <li><b>Svakom</b>（SA253B 等）→ Service <code>0xFFE0</code>、Write/Notify <code>0xFFE1</code>。<b>本页面已经内置 0xFFE0，输入框留空、直接点【连接玩具】就行，不用填任何东西。</b></li>
+        <li><b>Lovense</b> → Service UUID 一般 <code>5a30...</code> / <code>5300...</code> 开头</li>
+        <li><b>Lelo</b> → Service UUID 一般是 <code>6e400001-...</code>（Nordic UART）</li>
+        <li><b>Kiiroo</b> → Service UUID 一般是 <code>88f80001-...</code></li>
+      </ul>
+      Lovense / Lelo / Kiiroo 这几个如果懒得装 nRF Connect，可以直接拿同品牌别人解出来的完整 UUID 粘进来试一下。反正错了浏览器就连不上服务，不会变砖。
     </div>
   </div>
 </details>
