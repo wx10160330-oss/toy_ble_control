@@ -1,0 +1,6 @@
+name: svakom_ble_control
+display_name: Svakom BLE 远程控制
+desc: 通过 BLE 中继页面远程控制 Svakom 玩具，支持吮吸、振动、拍打三种模式。
+version: v1.0.0
+author: SXH
+repo: ""
