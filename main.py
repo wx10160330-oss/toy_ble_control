@@ -10,36 +10,58 @@ from astrbot.api import logger, llm_tool
 
 
 # 全局状态
+#
+# functions: 按功能名独立跟踪的状态表，每个功能能独立开关、互不干扰，
+#            这样 LLM 连着调 set(suck) + set(vibrate) + set(pat) 会三个同时跑，
+#            而不是后一个覆盖前一个。
+# version:   每次状态变化递增，浏览器轮询依赖这个判断“是否需要重新计算下发”。
 _state = {
-    "cmd": "stop",
-    "function": "none",
-    "mode": 0,
-    "intensity": 0,
+    "functions": {},  # name -> {"active": bool, "mode": int, "intensity": int}
+    "version": 0,
     "updated_at": 0,
 }
 _state_lock = threading.Lock()
 
 
+def _snapshot_state():
+    return {
+        "functions": {k: dict(v) for k, v in _state["functions"].items()},
+        "version": _state["version"],
+        "updated_at": _state["updated_at"],
+    }
+
+
 def _get_state():
     with _state_lock:
-        return dict(_state)
+        return _snapshot_state()
 
 
-def _set_state(cmd, function="none", mode=0, intensity=0):
+def _set_function(name, mode, intensity):
     with _state_lock:
-        _state["cmd"] = cmd
-        _state["function"] = function
-        _state["mode"] = mode
-        _state["intensity"] = intensity
+        _state["functions"][name] = {
+            "active": True,
+            "mode": int(mode),
+            "intensity": int(intensity),
+        }
+        _state["version"] += 1
         _state["updated_at"] = time.time()
 
 
 def _stop_function(function="all"):
     with _state_lock:
-        _state["cmd"] = "stop"
-        _state["function"] = function
-        _state["mode"] = 0
-        _state["intensity"] = 0
+        if function == "all":
+            for n in list(_state["functions"].keys()):
+                _state["functions"][n]["active"] = False
+                _state["functions"][n]["mode"] = 0
+                _state["functions"][n]["intensity"] = 0
+        else:
+            entry = _state["functions"].setdefault(
+                function, {"active": False, "mode": 0, "intensity": 0}
+            )
+            entry["active"] = False
+            entry["mode"] = 0
+            entry["intensity"] = 0
+        _state["version"] += 1
         _state["updated_at"] = time.time()
 
 
@@ -145,7 +167,9 @@ const NAME_FILTER_PREFIX = (TOY_CONFIG.name_filter_prefix || '').trim();
 let device = null;
 let writeChar = null;
 let polling = null;
-let lastUpdatedAt = 0;
+let lastVersion = -1;
+// 记住上一轮各功能的状态，用来 diff，避免重复下发相同指令。
+const lastFuncState = {}; // name -> {active, mode, intensity}
 
 function log(msg) {
   const el = document.getElementById('log');
@@ -281,35 +305,58 @@ function disconnectBLE() {
   log('已断开');
 }
 
+function describeActive(funcs) {
+  const parts = [];
+  for (const [name, st] of Object.entries(funcs || {})) {
+    if (st.active) {
+      const display = (findFunction(name) || {}).display_name || name;
+      parts.push(`${display} M${st.mode} I${st.intensity}`);
+    }
+  }
+  return parts.length ? parts.join(' / ') : '停止';
+}
+
 function startPolling() {
   if (polling) return;
   polling = setInterval(async () => {
     try {
       const res = await fetch(POLL_URL);
       const state = await res.json();
-      if (state.updated_at > lastUpdatedAt) {
-        lastUpdatedAt = state.updated_at;
-        const funcName = state.function || 'none';
-        const display = document.getElementById('cmdDisplay');
-        if (state.cmd === 'stop') {
-          display.textContent = '当前: 停止';
-          if (state.function === 'all' || state.function === 'none') {
-            for (const f of (TOY_CONFIG.functions || [])) {
-              const cmd = parseHexTemplate(f.stop_template, 0, 0);
-              if (cmd) { try { await writeBytes(cmd); } catch(e){} }
+      if (state.version === lastVersion) return;
+      lastVersion = state.version;
+      const funcs = state.functions || {};
+      const display = document.getElementById('cmdDisplay');
+      display.textContent = '当前: ' + describeActive(funcs);
+      // diff 逐个功能：变动才下发。多个功能可以同时运行。
+      const allNames = new Set([
+        ...Object.keys(lastFuncState),
+        ...Object.keys(funcs),
+      ]);
+      for (const name of allNames) {
+        const prev = lastFuncState[name] || { active: false, mode: 0, intensity: 0 };
+        const cur = funcs[name] || { active: false, mode: 0, intensity: 0 };
+        if (cur.active) {
+          // 之前不是 active，或档位变了 -> 重发启动指令
+          if (!prev.active || prev.mode !== cur.mode || prev.intensity !== cur.intensity) {
+            const cmd = buildCmd(name, cur.mode, cur.intensity);
+            if (cmd) {
+              try { await writeBytes(cmd); log(`${name} M${cur.mode} I${cur.intensity}`); }
+              catch(e) { log('下发失败 ' + name + ': ' + e.message); }
+            } else {
+              log('未知功能: ' + name);
             }
-            log('全部停止');
-          } else {
-            const cmd = buildStopCmd(state.function);
-            if (cmd) { await writeBytes(cmd); log('停止' + state.function); }
-            else { log('未知功能: ' + state.function); }
           }
-        } else if (state.cmd === 'set') {
-          display.textContent = `${funcName} M${state.mode} I${state.intensity}`;
-          const cmd = buildCmd(funcName, state.mode, state.intensity);
-          if (cmd) { await writeBytes(cmd); log(`${funcName} M${state.mode} I${state.intensity}`); }
-          else { log('未知功能: ' + funcName); }
+        } else {
+          // 之前 active、现在不 active 了 -> 下发停止指令
+          if (prev.active) {
+            const cmd = buildStopCmd(name);
+            if (cmd) {
+              try { await writeBytes(cmd); log('停止 ' + name); }
+              catch(e) { log('停止失败 ' + name + ': ' + e.message); }
+            }
+          }
         }
+        lastFuncState[name] = { active: cur.active, mode: cur.mode, intensity: cur.intensity };
       }
     } catch (e) {}
   }, 1000);
@@ -383,7 +430,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.2.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.3.0")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -496,13 +543,21 @@ class ToyBLEPlugin(Star):
         return web.json_response(_get_state())
 
     async def _handle_set_state(self, request):
+        """外部 HTTP 接口，按新的状态模型操作：
+
+        - 设置某个功能 运行： `{"cmd":"set","function":"vibrate","mode":5,"intensity":2}`
+        - 停止某个功能       ： `{"cmd":"stop","function":"vibrate"}`
+        - 停止所有           ： `{"cmd":"stop","function":"all"}` 或 `{"cmd":"stop"}`
+
+        多个功能可以独立调起，会同时运行。
+        """
         data = await request.json()
-        _set_state(
-            cmd=data.get("cmd", "stop"),
-            function=data.get("function", "none"),
-            mode=data.get("mode", 0),
-            intensity=data.get("intensity", 0),
-        )
+        cmd = data.get("cmd", "stop")
+        func = data.get("function", "all")
+        if cmd == "set":
+            _set_function(func, data.get("mode", 0), data.get("intensity", 0))
+        else:
+            _stop_function(func or "all")
         return web.json_response({"ok": True})
 
     async def _handle_get_config(self, request):
@@ -543,7 +598,7 @@ class ToyBLEPlugin(Star):
             i = fcfg["intensity_min"]
         m = max(fcfg["mode_min"], min(fcfg["mode_max"], m))
         i = max(fcfg["intensity_min"], min(fcfg["intensity_max"], i))
-        _set_state("set", func, m, i)
+        _set_function(func, m, i)
         return f"已设置 {fcfg.get('display_name', func)} 模式{m} 强度{i}"
 
     @llm_tool(name="toy_ble_stop")
@@ -565,13 +620,16 @@ class ToyBLEPlugin(Star):
 
     @llm_tool(name="toy_ble_status")
     async def toy_ble_status(self, event: AstrMessageEvent):
-        """查看玩具当前运行状态。"""
+        """查看玩具当前运行状态，会列出所有正在运行的功能。"""
         s = _get_state()
-        if s["cmd"] == "stop":
-            return "当前状态: 停止"
-        func = s["function"]
-        display = self.functions_by_name.get(func, {}).get("display_name", func)
-        return f"当前状态: {display} 模式{s['mode']} 强度{s['intensity']}"
+        active = []
+        for name, st in s["functions"].items():
+            if st.get("active"):
+                display = self.functions_by_name.get(name, {}).get("display_name", name)
+                active.append(f"{display} 模式{st['mode']} 强度{st['intensity']}")
+        if not active:
+            return "当前状态: 全部停止"
+        return "当前状态: " + " / ".join(active)
 
     @llm_tool(name="toy_ble_list_functions")
     async def toy_ble_list_functions(self, event: AstrMessageEvent):
