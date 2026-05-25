@@ -383,7 +383,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.1.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.2.0")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -519,9 +519,9 @@ class ToyBLEPlugin(Star):
         })
 
     # --- LLM 工具 ---
-    @llm_tool(name="toy_set")
-    async def toy_set(self, event: AstrMessageEvent, function: str, mode: str, intensity: str):
-        """控制玩具，设置功能、模式和强度。可用功能由插件配置决定，未知功能调用 toy_list_functions 查询。
+    @llm_tool(name="toy_ble_set")
+    async def toy_ble_set(self, event: AstrMessageEvent, function: str, mode: str, intensity: str):
+        """控制玩具，设置功能、模式和强度。可用功能由插件配置决定，未知功能调用 toy_ble_list_functions 查询。
 
         Args:
             function(string): 功能英文 ID（如 vibrate、suck、pat 等），具体取决于插件配置。
@@ -546,8 +546,8 @@ class ToyBLEPlugin(Star):
         _set_state("set", func, m, i)
         return f"已设置 {fcfg.get('display_name', func)} 模式{m} 强度{i}"
 
-    @llm_tool(name="toy_stop")
-    async def toy_stop(self, event: AstrMessageEvent, function: str = "all"):
+    @llm_tool(name="toy_ble_stop")
+    async def toy_ble_stop(self, event: AstrMessageEvent, function: str = "all"):
         """停止玩具功能。
 
         Args:
@@ -563,8 +563,8 @@ class ToyBLEPlugin(Star):
         display = self.functions_by_name[func].get("display_name", func)
         return f"已停止 {display}"
 
-    @llm_tool(name="toy_status")
-    async def toy_status(self, event: AstrMessageEvent):
+    @llm_tool(name="toy_ble_status")
+    async def toy_ble_status(self, event: AstrMessageEvent):
         """查看玩具当前运行状态。"""
         s = _get_state()
         if s["cmd"] == "stop":
@@ -573,8 +573,8 @@ class ToyBLEPlugin(Star):
         display = self.functions_by_name.get(func, {}).get("display_name", func)
         return f"当前状态: {display} 模式{s['mode']} 强度{s['intensity']}"
 
-    @llm_tool(name="toy_list_functions")
-    async def toy_list_functions(self, event: AstrMessageEvent):
+    @llm_tool(name="toy_ble_list_functions")
+    async def toy_ble_list_functions(self, event: AstrMessageEvent):
         """列出本玩具当前配置中所有可用功能及其取值范围。"""
         if not self.functions:
             return "未配置任何功能"
