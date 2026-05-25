@@ -47,10 +47,100 @@
     "hint": "留空则展示所有蓝牙设备；填了之后浏览器只显示名字以此开头的设备，便于在设备多的环境快速找到目标。例如 'Svakom'、'LVS'、'XS'。",
     "default": ""
   },
-  "functions_json": {
-    "description": "功能配置（JSON 数组）",
-    "type": "text",
-    "hint": "定义本玩具支持的功能。每项: name(唯一英文ID), display_name(中文显示名), command_template(指令字节模板，用空格分隔的两位 16 进制，{mode}/{intensity} 为占位符), stop_template(停止该功能的字节序列), mode_min/mode_max, intensity_min/intensity_max。占位符不区分大小写。\n\n不知道怎么抽自己玩具的字节格式？看 README 「五、如何探测自己玩具的协议」里的「Notify 观察法」，5 分钟能抽出一个功能的模板。",
-    "default": "[\n  {\n    \"name\": \"suck\",\n    \"display_name\": \"吮吸\",\n    \"command_template\": \"55 09 00 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 09 00 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 10,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  },\n  {\n    \"name\": \"vibrate\",\n    \"display_name\": \"振动\",\n    \"command_template\": \"55 03 00 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 03 00 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 10,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  },\n  {\n    \"name\": \"pat\",\n    \"display_name\": \"拍打\",\n    \"command_template\": \"55 07 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 07 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 4,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  }\n]"
+  "functions": {
+    "description": "玩具功能列表（点 + 号添加，垃圾桶删除）",
+    "type": "template_list",
+    "hint": "每个块就是一个功能（振动 / 吮吸 / 拍打 / 旋转 ...）。默认预填了 Svakom SA253B 的 3 个功能，你可以直接照着改成自己玩具的。\n\n填写要点：\n  · 英文名（name）：全小写英文，同一玩具内不能重复，LLM 用这个名字调用工具。爱填啥填啥（vibrate / pulse / heat / mode3 都行）。\n  · 启动指令编码（command_template）：空格分隔的两位 16 进制字节，{mode} / {intensity} 是占位符，插件会自动把传入的十进制档位转成两位 16 进制（10 档自动变 0a）。\n  · 停止指令编码（stop_template）：通常是把 mode、intensity 都置 0。\n  · 模式 / 强度范围：填十进制，例如玩具有 10 档模式就填 1 - 10。\n\n不知道怎么抽自己玩具的指令编码？看 README 「五、如何探测自己玩具的协议」里的「Notify 观察法」，5 分钟能抽出一个功能。",
+    "templates": {
+      "function": {
+        "name": "功能",
+        "hint": "一个玩具功能（振动 / 吮吸 / 拍打 ...）",
+        "items": {
+          "name": {
+            "description": "英文名（LLM 调用时填这个）",
+            "type": "string",
+            "hint": "全小写英文，同一玩具内不能重复。例：vibrate、suck、pat、pulse、heat。",
+            "default": ""
+          },
+          "display_name": {
+            "description": "中文显示名",
+            "type": "string",
+            "hint": "在网页 / 日志里显示用，例：振动、吮吸、加热。",
+            "default": ""
+          },
+          "command_template": {
+            "description": "启动指令编码",
+            "type": "string",
+            "hint": "空格分隔的两位 16 进制字节，用 {mode} 和 {intensity} 作占位符。\n例：55 03 00 00 {mode} {intensity} 00",
+            "default": ""
+          },
+          "stop_template": {
+            "description": "停止指令编码",
+            "type": "string",
+            "hint": "通常是把 mode / intensity 都置 0 的版本。\n例：55 03 00 00 00 00 00",
+            "default": ""
+          },
+          "mode_min": {
+            "description": "模式最小档位",
+            "type": "int",
+            "hint": "填十进制。LLM 传入小于此值会被裁剪到该值。",
+            "default": 1
+          },
+          "mode_max": {
+            "description": "模式最大档位",
+            "type": "int",
+            "hint": "填十进制。LLM 传入大于此值会被裁剪到该值。",
+            "default": 10
+          },
+          "intensity_min": {
+            "description": "强度最小值",
+            "type": "int",
+            "hint": "填十进制。LLM 传入小于此值会被裁剪到该值。",
+            "default": 1
+          },
+          "intensity_max": {
+            "description": "强度最大值",
+            "type": "int",
+            "hint": "填十进制。LLM 传入大于此值会被裁剪到该值。",
+            "default": 3
+          }
+        }
+      }
+    },
+    "default": [
+      {
+        "__template_key": "function",
+        "name": "suck",
+        "display_name": "吮吸",
+        "command_template": "55 09 00 00 {mode} {intensity} 00",
+        "stop_template": "55 09 00 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 10,
+        "intensity_min": 1,
+        "intensity_max": 3
+      },
+      {
+        "__template_key": "function",
+        "name": "vibrate",
+        "display_name": "振动",
+        "command_template": "55 03 00 00 {mode} {intensity} 00",
+        "stop_template": "55 03 00 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 10,
+        "intensity_min": 1,
+        "intensity_max": 3
+      },
+      {
+        "__template_key": "function",
+        "name": "pat",
+        "display_name": "拍打",
+        "command_template": "55 07 00 {mode} {intensity} 00",
+        "stop_template": "55 07 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 4,
+        "intensity_min": 1,
+        "intensity_max": 3
+      }
+    ]
   }
 }
