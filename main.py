@@ -409,6 +409,7 @@ table{width:100%;border-collapse:collapse;margin:8px 0}
 th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #1f2937;font-size:0.88em;vertical-align:middle}
 th{color:#9ca3af;font-weight:500;font-size:0.85em}
 .bytes{font-family:monospace;font-size:0.85em;color:#86efac;word-break:break-all}
+input.bytes-input{width:100%;min-width:230px;font-family:monospace;font-size:0.85em;color:#86efac}
 .tag{display:inline-block;padding:2px 6px;border-radius:4px;background:#374151;color:#d1d5db;font-size:0.75em;margin-right:4px}
 .tag.write{background:#1e3a8a;color:#bfdbfe}
 .tag.notify{background:#365314;color:#bef264}
@@ -448,19 +449,27 @@ a{color:#a78bfa}
 <p>连接成功后，下面会自动列出玩具暴露的所有特征。<b>带 WRITE 标签</b>的是写入通道（用来发指令），<b>带 NOTIFY 标签</b>的是通知通道（用来读玩具回报的状态字节）。</p>
 <div id="charList" class="card muted">尚未连接。</div>
 
-<h2>第 3 步：捕获各档位的字节</h2>
-<p>给每一行起一个 <b>功能英文名 / 模式 / 强度</b> 的标签，再按下面的<b>录制循环</b>把对应字节填进去。建议至少为每个功能采集 3~5 个不同档位（例如 mode=1/5/10，intensity=1/2/3）。</p>
+<h2>第 3 步：填入各档位的字节</h2>
+<p>两种方式调跳着用，什么顺手用什么：</p>
 
 <div class="card">
-  <b>录制单个状态的标准流程</b>（每次都要这样做）：
+  <b>方式 A：从 nRF Connect / 别的工具拓来，手动粘</b> ⭐ <b>推荐</b><br>
+  <span class="muted">你已经会用 nRF Connect 看 Notify 了。拓完的字节（如 <code>55 03 00 00 05 02 00</code>）直接粘到下表对应行的<b>字节数据</b>列里，探测器只负责分析 + 生成 JSON。不需要在本页面连玩具。这个最可靠。</span>
+</div>
+
+<div class="card">
+  <b>方式 B：本页面连玩具、点【捕获 Notify】自动读</b><br>
+  <span class="muted">依赖玩具本身的 Notify 缓存行为，不同品牌表现差异很大，可能读到脑数据（例如 "CHAR1_VALUE" 这种 nRF 测试写入的残留值）。能跳过就跳过。</span>
   <ol style="margin:6px 0 0 22px;font-size:0.88em">
-    <li>点上方"断开"，把玩具让给官方 APP</li>
-    <li>用官方 APP 把玩具调到目标状态（如：振动 模式 5 强度 2）</li>
-    <li>退出官方 APP（让它释放蓝牙）</li>
-    <li>回到这里点"重连"</li>
-    <li>找到对应行，点【捕获当前 Notify】</li>
+    <li>点上方【断开】，把玩具让给官方 APP</li>
+    <li>用官方 APP 把玩具调到目标状态（如振动 5 档 强度 2）</li>
+    <li>完全退出官方 APP（让它释放蓝牙）</li>
+    <li>回这里点【重连】</li>
+    <li>找到对应行，点【捕获 Notify】</li>
   </ol>
 </div>
+
+<p class="muted">两种方式可以混用：能自动捕获就点按钮，动不了的行手动粘个字节上去。能凑齐够多行去分析就行。</p>
 
 <div style="margin:8px 0">
   <button class="small" onclick="addRow()">+ 添加一行</button>
@@ -640,7 +649,13 @@ function renderCharList() {
     if (candidate) writeRef = candidate.ref;
   }
   if (!notifyRef) {
-    const candidate = allChars.find(c => c.isNotify && !c.isDanger);
+    // 挑选顺序：跳过标准 BLE 服务（0x1800/1801/180A/180F 都是 GAP/GATT 标准服务，上面的 notify 跟玩具本身没关系），
+    // 优先选 Vendor service 上的 notify 特征；如果同一个 service 里 Write 和 Notify 都有，优先取和 Write 同服务的。
+    const STD_SERVICES = new Set(['00001800-0000-1000-8000-00805f9b34fb', '00001801-0000-1000-8000-00805f9b34fb', '0000180a-0000-1000-8000-00805f9b34fb', '0000180f-0000-1000-8000-00805f9b34fb']);
+    const writeService = writeRef ? writeRef.service.uuid : null;
+    const candidates = allChars.filter(c => c.isNotify && !c.isDanger && !STD_SERVICES.has(c.service));
+    const sameSvc = writeService ? candidates.find(c => c.service === writeService) : null;
+    const candidate = sameSvc || candidates[0] || allChars.find(c => c.isNotify && !c.isDanger);
     if (candidate) notifyRef = candidate.ref;
   }
   let html = '<table><thead><tr><th>服务</th><th>特征</th><th>属性</th><th>用作</th></tr></thead><tbody>';
@@ -745,9 +760,9 @@ function renderRows() {
       <td><input type="text" value="${r.func.replace(/"/g, '&quot;')}" onchange="rows[${idx}].func=this.value"></td>
       <td><input type="number" value="${r.mode}" onchange="rows[${idx}].mode=parseInt(this.value)||0"></td>
       <td><input type="number" value="${r.intensity}" onchange="rows[${idx}].intensity=parseInt(this.value)||0"></td>
-      <td class="bytes">${r.bytesHex || '<span class="muted">(未捕获)</span>'}</td>
+      <td><input type="text" class="bytes-input" value="${r.bytesHex.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" placeholder="55 03 00 00 01 01 00" onchange="rows[${idx}].bytesHex=this.value.trim()"></td>
       <td class="row-actions">
-        <button class="small primary" onclick="captureRow(${idx})">捕获当前 Notify</button>
+        <button class="small primary" onclick="captureRow(${idx})" title="从 BLE Notify 读一次当前值填进去">捕获 Notify</button>
         <button class="small danger" onclick="deleteRow(${idx})">×</button>
       </td>
     </tr>`;
@@ -761,8 +776,8 @@ function deleteRow(idx) {
 }
 
 async function captureRow(idx) {
-  if (!device || !device.gatt.connected) { alert('请先连接玩具'); return; }
-  if (!notifyRef) { alert('请先在第 2 步选一个 Notify 特征'); return; }
+  if (!device || !device.gatt.connected) { alert('请先连接玩具，或者直接在字节数据输入框里手动粘贴 hex'); return; }
+  if (!notifyRef) { alert('请先在第 2 步选一个 Notify 特征，或者直接手动粘贴 hex'); return; }
   // 先尝试主动 readValue 拿最新值
   try {
     const v = await notifyRef.readValue();
@@ -771,7 +786,15 @@ async function captureRow(idx) {
     // 不支持 read 就用最近一次 push 进来的值
     log('readValue 不支持，用最近一次 push 值');
   }
-  if (!lastNotifyHex) { alert('还没有 notify 值。请先用官方 APP 把玩具调到目标状态，再回来点捕获。'); return; }
+  if (!lastNotifyHex) { alert('还没有 notify 值。要么先走一道「断开 -> 官方 APP 调状态 -> 重连 -> 捕获」，要么直接在该行的输入框里手输/粘 hex。'); return; }
+  // 检测的 ASCII：发现是文本字符串就主动提示用户这大概率不是玩具状态字节、是谁留下的脈冲数据，ASCII 协议本插件也不支持。
+  const bytes = lastNotifyHex.split(/\s+/).map(b => parseInt(b, 16));
+  const isAllAscii = bytes.length >= 4 && bytes.every(b => b >= 0x20 && b <= 0x7e);
+  if (isAllAscii) {
+    const text = String.fromCharCode(...bytes);
+    log(`⚠️ 捕到的全是可打印 ASCII："${text}"。这大概率是残留测试字符串（例如 nRF Connect 默认的 CHAR1_VALUE）、不是玩具状态。建议重启玩具 + 检查是否选错 Notify 特征。`);
+    if (!confirm(`检测到这串字节是可读 ASCII："${text}"\n\n这可能不是玩具状态、而是之前谁写进去的文本。还要填进表格吗？`)) return;
+  }
   rows[idx].bytesHex = lastNotifyHex;
   log(`第 ${idx + 1} 行已捕获: ${lastNotifyHex}`);
   renderRows();
@@ -953,7 +976,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.4.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.4.1")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
