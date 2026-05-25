@@ -1,6 +1,6 @@
 name: toy_ble_control
 display_name: 通用 BLE 玩具远程控制
 desc: 通过 BLE 中继页面远程控制蓝牙玩具。所有指令格式、UUID、功能均通过配置定义，可适配 Svakom / Lovense / Magic Motion 等任意支持 GATT 写入的 BLE 玩具。
-version: v2.4.0
+version: v2.4.1
 author: SXH
 repo: "https://github.com/wx10160330-oss/toy_ble_control"
