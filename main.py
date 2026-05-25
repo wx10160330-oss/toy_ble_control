@@ -434,6 +434,47 @@ a{color:#a78bfa}
 <div class="danger">⚠️ <b>千万别碰 0xAE00 服务</b>。那是 Telink 芯片的固件升级（OTA）通道，乱写会变砖。下方列表里这个服务会标红，看到就跳过。</div>
 
 <h2>第 1 步：连接玩具</h2>
+
+<div class="card">
+  <b>高级：自定义 Service UUID</b>（默认不填，只在玩具连上后看不到任何服务时才需要）<br>
+  <span class="muted">浏览器 Web Bluetooth 规定网页必须<b>预先声明</b>要访问哪些服务才能枚举特征。本页面内置了几个常见服务【<code>0xFFE0 0xFFE5 0xFFF0 0xFFF1 0xFFB0 0xFD00 0xFD01 0xFD30 0x1800 0x1801 0x180A 0x180F</code>】，足够覆盖 Svakom 和部分 Magic Motion。但 Lovense / Lelo / WeVibe / Kiiroo 之类用自定义 128 位 UUID 的玩具需要你手动填一下。</span>
+  <div style="margin-top:8px">
+    <input type="text" id="customUuids" placeholder="如 ： 7c490001-2e4e-4d8b-9b89-5fef96a98a72  或 0xFD30  或多个逗号隔开" style="width:100%;max-width:520px;font-family:monospace;font-size:0.85em">
+    <div class="muted" style="font-size:0.8em;margin-top:4px">多个 UUID 用逗号 / 空格 / 换行分隔都行。填完点下面「连接玩具」生效。</div>
+  </div>
+</div>
+
+<details class="card" style="border-color:#3b3b5e">
+  <summary style="cursor:pointer;color:#c4b5fd"><b>我怎么知道要填哪个 UUID？</b> （用 nRF Connect 查 1 分钟就能看到）</summary>
+  <div style="margin-top:8px;font-size:0.88em;line-height:1.6">
+    <p>手机装 nRF Connect （iOS 上叫 <i>nRF Connect for Mobile</i>，Android 同名）应用。玩具充电开机、不要连官方 APP。</p>
+    <ol style="margin:0 0 8px 22px">
+      <li>打开 nRF Connect <code>扫描 (Scanner)</code> 页，点【<b>Start scanning</b>】</li>
+      <li>在列表里找到你玩具的名字（按玩具的品牌型号，一般能看出来，如果多个可以靠近手机看信号强度最高的那个）</li>
+      <li>点【<b>Connect / 连接</b>】，进入该设备详情页</li>
+      <li>页面里会列出几个 Service，每个都有 UUID。过滤掉这几个【标准 BLE 服务、不是玩具本体的】：
+        <ul style="margin:4px 0 4px 22px">
+          <li><code>0x1800</code> Generic Access</li>
+          <li><code>0x1801</code> Generic Attribute</li>
+          <li><code>0x180A</code> Device Information</li>
+          <li><code>0x180F</code> Battery Service</li>
+          <li><code>0xAE00</code> / <code>0xAE01</code>（Telink OTA、<b>别点它</b>）</li>
+        </ul>
+      </li>
+      <li>剩下的 1 ~ 2 个 Service 就是玩具自家的。点进去看、或者直接看 UUID：
+        <ul style="margin:4px 0 4px 22px">
+          <li>16 位的如 <code>0xFFE0</code> / <code>0xFFB0</code> — <b>本页面已经在内置名单里</b>，不需要额外填</li>
+          <li>128 位的如 <code>5a300001-0023-4bd4-bbd5-a6920e4c5653</code> — <b>复制这个全部填进上面输入框</b></li>
+        </ul>
+      </li>
+      <li>上面填完，按手机返回键让 nRF Connect 断开玩具，再回本页面点【连接玩具】</li>
+    </ol>
+    <div class="warn" style="margin-top:8px">
+      <b>提示</b>：Lovense 系列的 Service UUID 一般是 <code>5a30...</code> / <code>5300...</code> 开头；Lelo 是 <code>6e400001-...</code> （Nordic UART）；Kiiroo 是 <code>88f80001-...</code>。看头上几个字节能猜个八九不离十。
+    </div>
+  </div>
+</details>
+
 <div class="card">
   <span class="dot off" id="dot"></span><span id="connStatus">未连接</span>
   <span id="deviceName" class="muted"></span>
@@ -497,12 +538,44 @@ let lastNotifyHex = null; // string '55 03 00 00 ...'
 let notifySubscribed = false;
 
 // 常见服务白名单（要先声明给浏览器，否则后续找不到）
-const OPTIONAL_SERVICES = [
+const BUILTIN_OPTIONAL_SERVICES = [
   0xFFE0, 0xFFE5, 0xFFF0, 0xFFF1, 0xFFB0,
   0x1800, 0x1801, 0x180A, 0x180F,
   0xFD00, 0xFD01, 0xFD30,
   // 其它常见的国产玩具方案商服务
 ];
+
+// 解析用户输入的 UUID，返回可供 Web Bluetooth 使用的格式（数字 / 128 位字符串）。无法解析返回 null。
+function parseUuidInput(s) {
+  if (!s) return null;
+  s = String(s).trim().toLowerCase().replace(/^0x/, '');
+  if (/^[0-9a-f]{1,4}$/.test(s)) {
+    return parseInt(s, 16);
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)) {
+    return s;
+  }
+  if (/^[0-9a-f]{32}$/.test(s)) {
+    return s.slice(0, 8) + '-' + s.slice(8, 12) + '-' + s.slice(12, 16) + '-' + s.slice(16, 20) + '-' + s.slice(20);
+  }
+  return null;
+}
+
+function getCustomUuids() {
+  const raw = (document.getElementById('customUuids').value || '').trim();
+  if (!raw) return [];
+  const tokens = raw.split(/[\s,;\n]+/).filter(Boolean);
+  const out = [];
+  for (const tok of tokens) {
+    const parsed = parseUuidInput(tok);
+    if (parsed === null) {
+      log(`⚠️ 忽略无法解析的 UUID: ${tok}`);
+      continue;
+    }
+    out.push(parsed);
+  }
+  return out;
+}
 // OTA / 危险服务（看到就警告，绝对不让操作）
 const DANGER_SERVICES = new Set(['0000ae00-0000-1000-8000-00805f9b34fb', '0000ae01-0000-1000-8000-00805f9b34fb']);
 
@@ -546,9 +619,12 @@ function propsArray(props) {
 async function connectBLE() {
   try {
     log('请求设备...');
+    const customs = getCustomUuids();
+    if (customs.length) log(`已加入自定义 UUID: ${customs.map(c => typeof c === 'number' ? '0x' + c.toString(16).toUpperCase() : c).join(', ')}`);
+    const optionalServices = BUILTIN_OPTIONAL_SERVICES.concat(customs);
     device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: OPTIONAL_SERVICES,
+      optionalServices,
     });
     device.addEventListener('gattserverdisconnected', onDisconnected);
     document.getElementById('deviceName').textContent = ' / ' + (device.name || '(无名称)');
@@ -953,7 +1029,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.4.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.4.1")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
