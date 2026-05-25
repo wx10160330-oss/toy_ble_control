@@ -437,7 +437,7 @@ a{color:#a78bfa}
 
 <div class="card">
   <b>高级：自定义 Service UUID</b>（默认不填，只在玩具连上后看不到任何服务时才需要）<br>
-  <span class="muted">浏览器 Web Bluetooth 规定网页必须<b>预先声明</b>要访问哪些服务才能枚举特征。本页面内置了几个常见服务【<code>0xFFE0 0xFFE5 0xFFF0 0xFFF1 0xFFB0 0xFD00 0xFD01 0xFD30 0x1800 0x1801 0x180A 0x180F</code>】，足够覆盖 Svakom 和部分 Magic Motion。但 Lovense / Lelo / WeVibe / Kiiroo 之类用自定义 128 位 UUID 的玩具需要你手动填一下。</span>
+  <span class="muted">浏览器 Web Bluetooth 规定网页必须<b>预先声明</b>要访问哪些服务才能枚举特征。本页面内置了几个常见服务【<code>0xFFE0 0xFFE5 0xFFF0 0xFFF1 0xFFB0 0xFD00 0xFD01 0xFD30 0x1800 0x1801 0x180A 0x180F</code>】，足够覆盖 Svakom 和部分 Magic Motion。其它玩具如果连上后看不到任何特征（第 2 步是空的），就照下面教程查一下 UUID 填进来。</span>
   <div style="margin-top:8px">
     <input type="text" id="customUuids" placeholder="如 ： 7c490001-2e4e-4d8b-9b89-5fef96a98a72  或 0xFD30  或多个逗号隔开" style="width:100%;max-width:520px;font-family:monospace;font-size:0.85em">
     <div class="muted" style="font-size:0.8em;margin-top:4px">多个 UUID 用逗号 / 空格 / 换行分隔都行。填完点下面「连接玩具」生效。</div>
@@ -452,25 +452,24 @@ a{color:#a78bfa}
       <li>打开 nRF Connect <code>扫描 (Scanner)</code> 页，点【<b>Start scanning</b>】</li>
       <li>在列表里找到你玩具的名字（按玩具的品牌型号，一般能看出来，如果多个可以靠近手机看信号强度最高的那个）</li>
       <li>点【<b>Connect / 连接</b>】，进入该设备详情页</li>
-      <li>页面里会列出几个 Service，每个都有 UUID。过滤掉这几个【标准 BLE 服务、不是玩具本体的】：
+      <li>页面里会列出几个 Service。除了下面这几个有明确名字的<b>标准 BLE 服务</b>，剩下的都会显示成 <code>Unknown Service</code>：
         <ul style="margin:4px 0 4px 22px">
-          <li><code>0x1800</code> Generic Access</li>
-          <li><code>0x1801</code> Generic Attribute</li>
-          <li><code>0x180A</code> Device Information</li>
-          <li><code>0x180F</code> Battery Service</li>
-          <li><code>0xAE00</code> / <code>0xAE01</code>（Telink OTA、<b>别点它</b>）</li>
+          <li><code>Generic Access</code> / <code>Generic Attribute</code> / <code>Device Information</code> / <code>Battery Service</code> — 这些是手机和玩具之间的通用协议，<b>不是玩具本体</b>，跳过</li>
+          <li><code>0xAE00</code> / <code>0xAE01</code> — Telink 芯片的 OTA 升级通道，<b>千万别点它</b>，乱写会变砖</li>
         </ul>
       </li>
-      <li>剩下的 1 ~ 2 个 Service 就是玩具自家的。点进去看、或者直接看 UUID：
+      <li>找标着【<b>Unknown Service</b>】的那一项（一般 1~2 个），<b>把它下面那一行 UUID 整个复制下来</b>，粘到上面的输入框里。
         <ul style="margin:4px 0 4px 22px">
-          <li>16 位的如 <code>0xFFE0</code> / <code>0xFFB0</code> — <b>本页面已经在内置名单里</b>，不需要额外填</li>
-          <li>128 位的如 <code>5a300001-0023-4bd4-bbd5-a6920e4c5653</code> — <b>复制这个全部填进上面输入框</b></li>
+          <li>UUID 可能是<b>短的</b>，像 <code>0xFFE0</code> / <code>0xFFB0</code> 这样的 4 位 hex（这种本页面已经在内置名单里，<b>填了也行不填也行</b>）</li>
+          <li>也可能是<b>长的</b>，像 <code>5a300001-0023-4bd4-bbd5-a6920e4c5653</code> 这种带横杠的 36 位（这种<b>必须填</b>否则浏览器看不到）</li>
+          <li>不管哪种，看到啥粘啥就对了</li>
         </ul>
       </li>
-      <li>上面填完，按手机返回键让 nRF Connect 断开玩具，再回本页面点【连接玩具】</li>
+      <li>多个 Unknown Service 就一起粘进来，逗号 / 空格 / 换行分隔都行</li>
+      <li>填完按手机返回键让 nRF Connect 断开玩具，再回本页面点【连接玩具】</li>
     </ol>
     <div class="warn" style="margin-top:8px">
-      <b>提示</b>：Lovense 系列的 Service UUID 一般是 <code>5a30...</code> / <code>5300...</code> 开头；Lelo 是 <code>6e400001-...</code> （Nordic UART）；Kiiroo 是 <code>88f80001-...</code>。看头上几个字节能猜个八九不离十。
+      <b>提示</b>：如果你懒得装 nRF Connect，常见品牌的 Service UUID 头几位是固定的——Lovense 一般是 <code>5a30...</code> / <code>5300...</code> 开头；Lelo 是 <code>6e400001-...</code> （Nordic UART）；Kiiroo 是 <code>88f80001-...</code>。瞎填一个试试也行，反正错了浏览器就连不上服务，不会变砖。
     </div>
   </div>
 </details>
