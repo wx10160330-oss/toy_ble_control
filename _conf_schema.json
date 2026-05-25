@@ -24,21 +24,21 @@
     "default": "0xFFE1"
   },
   "fallback_service_uuids": {
-    "description": "备用服务 UUID 列表",
+    "description": "备用服务 UUID 列表（高级，一般不用改）",
     "type": "list",
-    "hint": "主服务连不上时按顺序尝试这些 UUID。",
+    "hint": "运行时备选：连 service_uuid 失败时，按顺序尝试这个列表里的 UUID。适用场景：同一型号在不同固件版本上可能用不同的服务 UUID，多填几个能提高兼容性。\n\n⚠️ 这里填的所有 UUID 也必须出现在下面的 optional_services 里，否则浏览器会拒绝访问。\n\n不确定就保持默认。",
     "default": ["0xFFF0"]
   },
   "optional_services": {
-    "description": "Web Bluetooth optionalServices 列表",
+    "description": "浏览器访问白名单（高级，一般不用改）",
     "type": "list",
-    "hint": "搜索设备时必须声明所有可能用到的 service UUID，否则浏览器会拒绝访问。一般写主 UUID + 备用 UUID + 通用 UUID。",
+    "hint": "Web Bluetooth 的安全限制：网页搜索蓝牙设备时，必须提前声明会访问哪些服务 UUID，没声明的哪怕设备暴露了也会被拒绝（SecurityError）。\n\n这个列表就是那张“我会用到这些 UUID”的声明表，必须同时包含：\n  · service_uuid 里填的主 UUID\n  · fallback_service_uuids 里填的所有备用 UUID\n  · 推荐保留默认里的 0x1800 / 0x1801（BLE 标准服务，部分手机不声明会出莫名其妙的兼容问题）\n\n不确定就保持默认。只有当你的玩具用了一个不在默认列表里的服务 UUID 时，才需要把它加进来。",
     "default": ["0xFFE0", "0xFFE5", "0xFFF0", "0x1800", "0x1801"]
   },
   "write_without_response": {
-    "description": "使用 writeWithoutResponse 写入（⚠️ 默认关闭，不确定就别动）",
+    "description": "使用 writeWithoutResponse 写入（⚠️ 不确定就保持默认 false）",
     "type": "bool",
-    "hint": "BLE 写入有两种方式：Write Request（有响应，对应 JS 的 writeValue）和 Write Without Response（无响应，对应 writeValueWithoutResponse）。选错了的常见表现是【设备能收到数据但完全不执行】或【连上就被拒】。\n\n判断方法：用 nRF Connect 连上玩具，进入写入特征，看它的 Properties。\n  · 只写着 WRITE / WRITE REQUEST  ⇒  保持默认关闭（false）。Svakom 大部分型号属于这种。\n  · 只写着 WRITE-WITHOUT-RESPONSE / WRITE NO RESPONSE  ⇒  开启（true）。某些 Lovense BLE 型号、部分高频脉冲玩具属于这种。\n  · 两个都写着  ⇒  两种都行，建议保持默认关闭，更稳。\n\n如果你不知道自己玩具是哪种，就保持默认 false——这跟 v1.0.0 老版本的行为完全一致。",
+    "hint": "BLE 写入有两种方式，选错了的常见表现是【设备能收到数据但完全不执行】。\n\n用 nRF Connect 连上玩具，看写入特征的 Properties：\n  · 只有 WRITE / WRITE REQUEST          ⇒ 保持 false\n  · 只有 WRITE-WITHOUT-RESPONSE         ⇒ 设为 true\n  · 两个都有                          ⇒ 保持 false 更稳",
     "default": false
   },
   "name_filter_prefix": {
