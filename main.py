@@ -431,7 +431,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.5.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.5.2")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
