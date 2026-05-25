@@ -329,7 +329,7 @@ window.addEventListener('load', () => {
 
 
 def _normalize_functions(raw):
-    """校验并归一化 functions 列表。允许部分字段缺失，给出合理默认。"""
+    """校验并归一化 functions 列表。允许部分字段缺失，给出合理默认。丢弃 __template_key 等平台元数据。"""
     if not isinstance(raw, list) or not raw:
         return list(DEFAULT_FUNCTIONS)
     normalized = []
@@ -339,24 +339,36 @@ def _normalize_functions(raw):
             continue
         name = str(item.get("name", "")).strip()
         if not name:
-            logger.warning(f"functions[{idx}] 缺少 name，跳过")
+            # 空名字的槽位在 template_list UI 上是合法状态（用户开了块但还没填），静默跳过
             continue
         normalized.append({
             "name": name,
-            "display_name": str(item.get("display_name", name)),
-            "command_template": str(item.get("command_template", "")),
-            "stop_template": str(item.get("stop_template", "")),
-            "mode_min": int(item.get("mode_min", 1)),
-            "mode_max": int(item.get("mode_max", 10)),
-            "intensity_min": int(item.get("intensity_min", 1)),
-            "intensity_max": int(item.get("intensity_max", 3)),
+            "display_name": str(item.get("display_name", "")).strip() or name,
+            "command_template": str(item.get("command_template", "")).strip(),
+            "stop_template": str(item.get("stop_template", "")).strip(),
+            "mode_min": _safe_int(item.get("mode_min"), 1),
+            "mode_max": _safe_int(item.get("mode_max"), 10),
+            "intensity_min": _safe_int(item.get("intensity_min"), 1),
+            "intensity_max": _safe_int(item.get("intensity_max"), 3),
         })
     return normalized or list(DEFAULT_FUNCTIONS)
 
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _parse_functions_config(value):
-    """支持配置里既可以是 JSON 字符串，也可以是已经解析好的 list/dict。"""
-    if value is None or value == "":
+    """接受以下几种输入，都返回归一化后的 functions 列表：
+
+    — None / "" / [] / {}             → 使用默认配置
+    — list (template_list 保存后的格式)  → 直接归一化
+    — str (JSON 字符串，为了兼容手填)        → 先 JSON.parse 再归一化
+    """
+    if value is None or value == "" or value == [] or value == {}:
         return list(DEFAULT_FUNCTIONS)
     if isinstance(value, list):
         return _normalize_functions(value)
@@ -364,14 +376,14 @@ def _parse_functions_config(value):
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError as e:
-            logger.error(f"functions_json 解析失败，使用默认配置: {e}")
+            logger.error(f"functions 配置解析失败，使用默认: {e}")
             return list(DEFAULT_FUNCTIONS)
         return _normalize_functions(parsed)
     logger.warning(f"未知 functions 配置类型 {type(value)}，使用默认")
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.0.0")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.1.0")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -407,7 +419,14 @@ class ToyBLEPlugin(Star):
 
         self.write_without_response = bool(g("write_without_response", False))
         self.name_filter_prefix = str(g("name_filter_prefix", "")) or ""
-        self.functions = _parse_functions_config(g("functions_json", ""))
+        # 优先读取新的 template_list 格式；如果老配置里还剩 functions_json （从旧版本迁移过来）也能读
+        raw_functions = g("functions", None)
+        if raw_functions is None or raw_functions == "" or raw_functions == [] or raw_functions == {}:
+            legacy_json = g("functions_json", "")
+            if legacy_json:
+                logger.info("[toy_ble_control] 检测到旧版 functions_json 配置，已自动迁移。建议在配置面板里重新编辑 functions 后保存")
+                raw_functions = legacy_json
+        self.functions = _parse_functions_config(raw_functions)
         self.functions_by_name = {f["name"]: f for f in self.functions}
         logger.info(
             f"[toy_ble_control] 加载配置: 端口={self.port}, "
