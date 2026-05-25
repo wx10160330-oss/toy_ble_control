@@ -1,0 +1,56 @@
+{
+  "port": {
+    "description": "HTTP 中继服务端口",
+    "type": "int",
+    "hint": "插件会在该端口启动一个 HTTP 服务，给手机浏览器打开中继页用。默认 5122。",
+    "default": 5122
+  },
+  "toy_name": {
+    "description": "玩具名称（仅显示）",
+    "type": "string",
+    "hint": "显示在中继网页标题里，不影响功能。",
+    "default": "BLE Toy"
+  },
+  "service_uuid": {
+    "description": "BLE 服务 UUID",
+    "type": "string",
+    "hint": "用 nRF Connect 等工具扫描设备得到。可填短格式 0xFFE0、FFE0，或完整 UUID 0000ffe0-0000-1000-8000-00805f9b34fb。",
+    "default": "0xFFE0"
+  },
+  "write_characteristic_uuid": {
+    "description": "BLE 写入特征 UUID",
+    "type": "string",
+    "hint": "用于发送指令的特征 UUID，需 Properties 含 WRITE 或 WRITE WITHOUT RESPONSE。",
+    "default": "0xFFE1"
+  },
+  "fallback_service_uuids": {
+    "description": "备用服务 UUID 列表",
+    "type": "list",
+    "hint": "主服务连不上时按顺序尝试这些 UUID。",
+    "default": ["0xFFF0"]
+  },
+  "optional_services": {
+    "description": "Web Bluetooth optionalServices 列表",
+    "type": "list",
+    "hint": "搜索设备时必须声明所有可能用到的 service UUID，否则浏览器会拒绝访问。一般写主 UUID + 备用 UUID + 通用 UUID。",
+    "default": ["0xFFE0", "0xFFE5", "0xFFF0", "0x1800", "0x1801"]
+  },
+  "write_without_response": {
+    "description": "使用 writeWithoutResponse 写入",
+    "type": "bool",
+    "hint": "如果设备特征的 Properties 只有 WRITE WITHOUT RESPONSE（没有 WRITE），开启此项。",
+    "default": false
+  },
+  "name_filter_prefix": {
+    "description": "设备名前缀过滤（可选）",
+    "type": "string",
+    "hint": "留空则展示所有蓝牙设备；填了之后浏览器只显示名字以此开头的设备，便于在设备多的环境快速找到目标。例如 'Svakom'、'LVS'、'XS'。",
+    "default": ""
+  },
+  "functions_json": {
+    "description": "功能配置（JSON 数组）",
+    "type": "text",
+    "hint": "定义本玩具支持的功能。每项: name(唯一英文ID), display_name(中文显示名), command_template(指令字节模板，用空格分隔的两位 16 进制，{mode}/{intensity} 为占位符), stop_template(停止该功能的字节序列), mode_min/mode_max, intensity_min/intensity_max。占位符不区分大小写。",
+    "default": "[\n  {\n    \"name\": \"suck\",\n    \"display_name\": \"吮吸\",\n    \"command_template\": \"55 09 00 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 09 00 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 10,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  },\n  {\n    \"name\": \"vibrate\",\n    \"display_name\": \"振动\",\n    \"command_template\": \"55 03 00 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 03 00 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 10,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  },\n  {\n    \"name\": \"pat\",\n    \"display_name\": \"拍打\",\n    \"command_template\": \"55 07 00 {mode} {intensity} 00\",\n    \"stop_template\": \"55 07 00 00 00 00\",\n    \"mode_min\": 1,\n    \"mode_max\": 4,\n    \"intensity_min\": 1,\n    \"intensity_max\": 3\n  }\n]"
+  }
+}
