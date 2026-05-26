@@ -367,6 +367,87 @@ SecurityError: Origin is not allowed to access the service xxx
 
 ---
 
+### 🍎 iOS 用户专属：抓包方案 4 法
+
+第五节前面的工作流是按 nRF Connect (Android / Win / Mac 桌面版) 写的，但**官方的玩具控制 App 通常只有 iOS / Android 版**，所以如果你（或你朋友）只有 iPhone 没 Android，下面这 4 条路都能完成同一件事——按可行性排序：
+
+#### 方案 A：**LightBlue Explorer**（免费 / iOS / 推荐 ⭐⭐⭐）—— iOS 版 nRF Connect
+
+> 直接对应第五节的工作流，**所有「nRF Connect」操作都换成「LightBlue」**，跑两次循环的技巧照样适用（是 BLE 协议层的特性，跟 OS 无关）。
+
+1. **iPhone App Store 搜「LightBlue」** → 开发商「Punch Through」（图标是青色雷电）
+2. 免费版就够用，**不需要内购**——内购解锁的是模拟设备等高级功能，对我们没用
+3. 装好打开 → 自动开始扫描周围 BLE 设备
+4. 点你的玩具名（确认电池图标和信号强度，免得选错）
+5. **完全按第五节「第一步：侦察设备结构」往下走**：找 Unknown Service、找带 Notify 属性的特征、点 Listen for notifications、断开切官方 APP、跑两次循环、记字节
+6. 抓到的字节值在 LightBlue 里以 Hex 形式直接显示，**拷下来填进插件配置**就行
+
+> ⚠️ 跟 nRF Connect 一样的限制：**不能同时**让 LightBlue 和官方 APP 都连着玩具（BLE 单主），所以必须走「断 LightBlue → 切官方 APP → 退后台 → 重连 LightBlue → 读」这套循环。
+
+#### 方案 B：**Mac + iPhone + PacketLogger**（免费但需 Mac ⭐⭐⭐⭐）—— 终极可靠
+
+这是 Apple 官方提供的工具，**直接抓 iPhone 蓝牙堆栈所有流量**，等于 iOS 版的「HCI snoop log + Wireshark」，比 LightBlue 强一档：
+
+- ✅ **可以同时**抓「官方 APP ↔ 玩具」的实时通信（LightBlue 做不到，因为 BLE 单主）
+- ✅ 不受 Notify 缓存影响，**100% 可靠**，跟玩具固件无关
+- ✅ 免费
+- ❌ **必须有 Mac**（Windows / Linux 上没等价工具）
+
+**完整步骤**：
+
+1. **Mac 端装 PacketLogger**
+   - 浏览器打开 [https://developer.apple.com/download/more/](https://developer.apple.com/download/more/)（用 Apple ID 登录，**免费账号即可**，不需要 99 美元 / 年的开发者账号）
+   - 搜索 **「Additional Tools for Xcode」**，下最新版（一个 DMG）
+   - 打开 DMG → 进入 `Hardware/` 目录 → 把 **PacketLogger.app** 拖到「应用程序」
+
+2. **iPhone 端装蓝牙诊断 Profile**（让 iOS 把 BLE 流量发给 Mac）
+   - 在 iPhone 上打开 [https://developer.apple.com/bug-reporting/profiles-and-logs/](https://developer.apple.com/bug-reporting/profiles-and-logs/)（用同一 Apple ID 登录）
+   - 找到 **「Bluetooth」** 那一条，点下载 profile
+   - iPhone → 设置 → 通用 → VPN 与设备管理 → 找到刚下的 profile → 安装（要输入解锁密码）
+   - **重启 iPhone**（profile 这种东西不重启不生效）
+
+3. **抓包**
+   - 数据线连 iPhone → Mac，**iPhone 上信任这台电脑**（弹窗里点信任 + 输入密码）
+   - Mac 打开 **PacketLogger.app** → 顶部菜单 **File → New iOS Trace** → 选你的 iPhone → 开始抓
+   - 此时 PacketLogger 会实时刷出 iPhone 所有蓝牙包
+   - 在 iPhone 上**正常用官方 APP 操作玩具**：振动 1 档强度 1、振动 1 档强度 2、振动 5 档强度 2、停止、吮吸……所有你想抓的档位都走一遍
+   - 在 PacketLogger 里**过滤** `ATT Send Write Command`，每一条的 `Value` 就是官方 APP 发给玩具的字节
+   - 对照你操作的顺序，反解出每个档位对应的字节
+   - 抓完点停止，**导出**结果（保存 .pklg 文件备份）
+
+4. **把抓到的字节填进插件配置**——跟第五节「第四步：把协议填进配置」一样
+
+> **提示**：PacketLogger 第一次看可能信息量大到吓人。**找 Write Command 这一类就够了**，其它（Read Response、Notification、广播帧等等）都可以暂时忽略。
+
+#### 方案 C：**iOS 上 Bluefy 浏览器 + 中继页**（≈¥18 ⚠️ 未验证）
+
+如果你朋友既不想借电脑、又不想装 LightBlue 学 BLE 概念，**可以让她试试**：
+
+1. iPhone App Store 搜「Bluefy - Web BLE Browser」（≈ ¥18）
+2. 装好 → 打开 → 在地址栏访问 `https://你部署的域名/`（注意必须 HTTPS，方案 C 在 iOS 上对 HTTPS 要求比 Chrome 严）
+3. 跟普通用法一样点【连接玩具】
+
+⚠️ **测试缺口**：维护者（我和插件作者）都没有 iPhone，**没法验证 Bluefy 的 Web Bluetooth 实现是否完整支持读 Notify 字节**。如果你朋友愿意当小白鼠测一下，回报结果我们补进 README。
+
+#### 方案 D：**借一台带蓝牙的电脑（Mac / Win / Linux）+ Chrome**
+
+这个其实跟 iOS 无关了——你 iOS 朋友找一台 Mac 或者 Windows 电脑，自带蓝牙（笔记本都有，台式机插个 USB 蓝牙适配器即可），用 Chrome 打开中继页。跟你现在的用法完全一样。
+
+具体可参考 [三、2 中继客户端设备](#2-中继客户端设备--手机--平板--电脑都行) 那一节。
+
+---
+
+#### 4 条路怎么选
+
+| 朋友情况 | 推荐方案 |
+|---|---|
+| 只有 iPhone、想最省事 | **A: LightBlue** —— 等同于你之前 nRF Connect 那套，免费 |
+| 有 Mac 且想抓得最准（甚至想抓官方 APP 实时通信） | **B: PacketLogger** —— 一劳永逸 |
+| 有 iPhone + iPad 或其它 iOS 设备但**只想用网页 / 嫌装 App 麻烦** | **C: Bluefy** —— 但 ⚠️ 自己当小白鼠 |
+| 朋友家里有任何带蓝牙的 PC / Mac / Linux | **D: 借电脑 + Chrome** —— 最稳，零安装 |
+
+---
+
 ## 六、参考配置：常见玩具示例
 
 下面列出几个示例填法，供参考。面板里照着这些填到各个子框即可。
