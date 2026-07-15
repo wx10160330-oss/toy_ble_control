@@ -1,0 +1,146 @@
+{
+  "port": {
+    "description": "HTTP 中继服务端口",
+    "type": "int",
+    "hint": "插件会在该端口启动一个 HTTP 服务，给手机浏览器打开中继页用。默认 5122。",
+    "default": 5122
+  },
+  "toy_name": {
+    "description": "玩具名称（仅显示）",
+    "type": "string",
+    "hint": "显示在中继网页标题里，不影响功能。",
+    "default": "BLE Toy"
+  },
+  "service_uuid": {
+    "description": "BLE 服务 UUID",
+    "type": "string",
+    "hint": "用 nRF Connect 等工具扫描设备得到。可填短格式 0xFFE0、FFE0，或完整 UUID 0000ffe0-0000-1000-8000-00805f9b34fb。\n\n不会抽自己玩具的 UUID？看 README 「五、如何探测自己玩具的协议」一节，里面有完整步骤。⚠️ 别填《0xAE00》这一类 OTA 服务的 UUID，可能刷砖。",
+    "default": "0xFFE0"
+  },
+  "write_characteristic_uuid": {
+    "description": "BLE 写入特征 UUID",
+    "type": "string",
+    "hint": "用于发送指令的特征 UUID，需 Properties 含 WRITE 或 WRITE WITHOUT RESPONSE。不同品牌 Write / Notify 的顺序不同，不要拿别人的 UUID 直接抄。详细如何抽看 README 「五、如何探测自己玩具的协议」。",
+    "default": "0xFFE1"
+  },
+  "fallback_service_uuids": {
+    "description": "备用服务 UUID 列表（高级，一般不用改）",
+    "type": "list",
+    "hint": "运行时备选：连 service_uuid 失败时，按顺序尝试这个列表里的 UUID。适用场景：同一型号在不同固件版本上可能用不同的服务 UUID，多填几个能提高兼容性。\n\n⚠️ 这里填的所有 UUID 也必须出现在下面的 optional_services 里，否则浏览器会拒绝访问。\n\n不确定就保持默认。",
+    "default": ["0xFFF0"]
+  },
+  "optional_services": {
+    "description": "浏览器访问白名单（高级，一般不用改）",
+    "type": "list",
+    "hint": "Web Bluetooth 的安全限制：网页搜索蓝牙设备时，必须提前声明会访问哪些服务 UUID，没声明的哪怕设备暴露了也会被拒绝（SecurityError）。\n\n这个列表就是那张“我会用到这些 UUID”的声明表，必须同时包含：\n  · service_uuid 里填的主 UUID\n  · fallback_service_uuids 里填的所有备用 UUID\n  · 推荐保留默认里的 0x1800 / 0x1801（BLE 标准服务，部分手机不声明会出莫名其妙的兼容问题）\n\n不确定就保持默认。只有当你的玩具用了一个不在默认列表里的服务 UUID 时，才需要把它加进来。",
+    "default": ["0xFFE0", "0xFFE5", "0xFFF0", "0x1800", "0x1801"]
+  },
+  "write_without_response": {
+    "description": "使用 writeWithoutResponse 写入（⚠️ 不确定就保持默认 false）",
+    "type": "bool",
+    "hint": "BLE 写入有两种方式，选错了的常见表现是【设备能收到数据但完全不执行】。\n\n用 nRF Connect 连上玩具，看写入特征的 Properties：\n  · 只有 WRITE / WRITE REQUEST          ⇒ 保持 false\n  · 只有 WRITE-WITHOUT-RESPONSE         ⇒ 设为 true\n  · 两个都有                          ⇒ 保持 false 更稳",
+    "default": false
+  },
+  "name_filter_prefix": {
+    "description": "设备名前缀过滤（可选）",
+    "type": "string",
+    "hint": "留空则展示所有蓝牙设备；填了之后浏览器只显示名字以此开头的设备，便于在设备多的环境快速找到目标。例如 'Svakom'、'LVS'、'XS'。",
+    "default": ""
+  },
+  "functions": {
+    "description": "玩具功能列表（点 + 号添加，垃圾桶删除）",
+    "type": "template_list",
+    "hint": "每个块就是一个功能（振动 / 吮吸 / 拍打 / 旋转 ...）。默认预填了 Svakom SA253B 的 3 个功能，你可以直接照着改成自己玩具的。\n\n填写要点：\n  · 英文名（name）：全小写英文，同一玩具内不能重复，LLM 用这个名字调用工具。爱填啥填啥（vibrate / pulse / heat / mode3 都行）。\n  · 启动指令编码（command_template）：空格分隔的两位 16 进制字节，{mode} / {intensity} 是占位符，插件会自动把传入的十进制档位转成两位 16 进制（10 档自动变 0a）。\n  · 停止指令编码（stop_template）：通常是把 mode、intensity 都置 0。\n  · 模式 / 强度范围：填十进制，例如玩具有 10 档模式就填 1 - 10。\n\n不知道怎么抽自己玩具的指令编码？看 README 「五、如何探测自己玩具的协议」里的「Notify 观察法」，5 分钟能抽出一个功能。",
+    "templates": {
+      "function": {
+        "name": "功能",
+        "hint": "一个玩具功能（振动 / 吮吸 / 拍打 ...）",
+        "items": {
+          "name": {
+            "description": "英文名（LLM 调用时填这个）",
+            "type": "string",
+            "hint": "全小写英文，同一玩具内不能重复。例：vibrate、suck、pat、pulse、heat。",
+            "default": ""
+          },
+          "display_name": {
+            "description": "中文显示名",
+            "type": "string",
+            "hint": "在网页 / 日志里显示用，例：振动、吮吸、加热。",
+            "default": ""
+          },
+          "command_template": {
+            "description": "启动指令编码",
+            "type": "string",
+            "hint": "空格分隔的两位 16 进制字节，用 {mode} 和 {intensity} 作占位符。\n例：55 03 00 00 {mode} {intensity} 00",
+            "default": ""
+          },
+          "stop_template": {
+            "description": "停止指令编码",
+            "type": "string",
+            "hint": "通常是把 mode / intensity 都置 0 的版本。\n例：55 03 00 00 00 00 00",
+            "default": ""
+          },
+          "mode_min": {
+            "description": "模式最小档位",
+            "type": "int",
+            "hint": "填十进制。LLM 传入小于此值会被裁剪到该值。",
+            "default": 1
+          },
+          "mode_max": {
+            "description": "模式最大档位",
+            "type": "int",
+            "hint": "填十进制。LLM 传入大于此值会被裁剪到该值。",
+            "default": 10
+          },
+          "intensity_min": {
+            "description": "强度最小值",
+            "type": "int",
+            "hint": "填十进制。LLM 传入小于此值会被裁剪到该值。",
+            "default": 1
+          },
+          "intensity_max": {
+            "description": "强度最大值",
+            "type": "int",
+            "hint": "填十进制。LLM 传入大于此值会被裁剪到该值。",
+            "default": 3
+          }
+        }
+      }
+    },
+    "default": [
+      {
+        "__template_key": "function",
+        "name": "suck",
+        "display_name": "吮吸",
+        "command_template": "55 09 00 00 {mode} {intensity} 00",
+        "stop_template": "55 09 00 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 10,
+        "intensity_min": 1,
+        "intensity_max": 3
+      },
+      {
+        "__template_key": "function",
+        "name": "vibrate",
+        "display_name": "振动",
+        "command_template": "55 03 00 00 {mode} {intensity} 00",
+        "stop_template": "55 03 00 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 10,
+        "intensity_min": 1,
+        "intensity_max": 3
+      },
+      {
+        "__template_key": "function",
+        "name": "pat",
+        "display_name": "拍打",
+        "command_template": "55 07 00 {mode} {intensity} 00",
+        "stop_template": "55 07 00 00 00 00",
+        "mode_min": 1,
+        "mode_max": 4,
+        "intensity_min": 1,
+        "intensity_max": 3
+      }
+    ]
+  }
+}
