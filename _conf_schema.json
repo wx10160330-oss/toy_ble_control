@@ -103,6 +103,12 @@
             "type": "int",
             "hint": "填十进制。LLM 传入大于此值会被裁剪到该值。",
             "default": 3
+          },
+          "mode_description": {
+            "description": "模式描述（可选，AI 与网页都能看到）",
+            "type": "text",
+            "hint": "写清楚每个模式对应的感觉/节奏，帮助 AI 更准地选模式，也会显示在中继网页的功能卡片里。留空则不显示，不影响功能。\n\n示例：\n模式1：持续稳定震动\n模式3：波浪形，先慢后快再慢，像海浪起伏\n模式5：快一下慢一下，快速震动后停顿再快速震动\n模式7：渐强渐弱循环",
+            "default": ""
           }
         }
       }
@@ -117,7 +123,8 @@
         "mode_min": 1,
         "mode_max": 10,
         "intensity_min": 1,
-        "intensity_max": 3
+        "intensity_max": 3,
+        "mode_description": ""
       },
       {
         "__template_key": "function",
@@ -128,7 +135,8 @@
         "mode_min": 1,
         "mode_max": 10,
         "intensity_min": 1,
-        "intensity_max": 3
+        "intensity_max": 3,
+        "mode_description": ""
       },
       {
         "__template_key": "function",
@@ -139,7 +147,8 @@
         "mode_min": 1,
         "mode_max": 4,
         "intensity_min": 1,
-        "intensity_max": 3
+        "intensity_max": 3,
+        "mode_description": ""
       }
     ]
   }

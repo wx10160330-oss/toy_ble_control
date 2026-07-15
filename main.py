@@ -76,6 +76,7 @@ DEFAULT_FUNCTIONS = [
         "mode_max": 10,
         "intensity_min": 1,
         "intensity_max": 3,
+        "mode_description": "",
     },
     {
         "name": "vibrate",
@@ -86,6 +87,7 @@ DEFAULT_FUNCTIONS = [
         "mode_max": 10,
         "intensity_min": 1,
         "intensity_max": 3,
+        "mode_description": "",
     },
     {
         "name": "pat",
@@ -96,6 +98,7 @@ DEFAULT_FUNCTIONS = [
         "mode_max": 4,
         "intensity_min": 1,
         "intensity_max": 3,
+        "mode_description": "",
     },
 ]
 
@@ -275,7 +278,7 @@ button:active{transform:scale(.96)}
 }
 #btnStopAll:hover{background:var(--surface-hover);box-shadow:0 0 18px rgba(201,106,106,.25)}
 .panel-hint{font-size:.8em;color:var(--caption);text-align:center;margin:2px 0 6px}
-.panel-empty{text-align:center;color:var(--muted);font-size:.9em;padding:20px}
+.mode-desc{margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:.82em;line-height:1.55;color:var(--muted);white-space:pre-wrap;word-break:break-word}.mode-desc .mode-desc-label{display:block;font-size:.75em;color:var(--caption);letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase}.panel-empty{text-align:center;color:var(--muted);font-size:.9em;padding:20px}
 </style>
 </head>
 <body>
@@ -548,6 +551,21 @@ function renderPanel() {
     head.appendChild(stopBtn);
     row.appendChild(head);
 
+    // 模式描述（可选，填了才显示）
+    const descText = (f.mode_description || '').trim();
+    if (descText) {
+      const descBox = document.createElement('div');
+      descBox.className = 'mode-desc';
+      const descLabel = document.createElement('span');
+      descLabel.className = 'mode-desc-label';
+      descLabel.textContent = '模式说明';
+      const descBody = document.createElement('span');
+      descBody.textContent = descText;
+      descBox.appendChild(descLabel);
+      descBox.appendChild(descBody);
+      row.appendChild(descBox);
+    }
+
     // 模式档位
     const modeWrap = document.createElement('div');
     modeWrap.className = 'row';
@@ -704,6 +722,7 @@ def _normalize_functions(raw):
             "mode_max": _safe_int(item.get("mode_max"), 10),
             "intensity_min": _safe_int(item.get("intensity_min"), 1),
             "intensity_max": _safe_int(item.get("intensity_max"), 3),
+            "mode_description": str(item.get("mode_description", "") or "").strip(),
         })
     return normalized or list(DEFAULT_FUNCTIONS)
 
@@ -737,7 +756,7 @@ def _parse_functions_config(value):
     return list(DEFAULT_FUNCTIONS)
 
 
-@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.5.2")
+@register("toy_ble_control", "SXH", "可配置的 BLE 玩具远程控制插件", "2.6.0")
 class ToyBLEPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -940,7 +959,7 @@ class ToyBLEPlugin(Star):
 
     @llm_tool(name="toy_ble_list_functions")
     async def toy_ble_list_functions(self, event: AstrMessageEvent, **kwargs):
-        """列出本玩具当前配置中所有可用功能及其取值范围。"""
+        """列出本玩具当前配置中所有可用功能及其取值范围。若功能配置了模式描述，会一并返回，便于根据用户偏好选择模式。"""
         if not self.functions:
             return "未配置任何功能"
         lines = []
@@ -950,6 +969,12 @@ class ToyBLEPlugin(Star):
                 f"mode {f['mode_min']}~{f['mode_max']}, "
                 f"intensity {f['intensity_min']}~{f['intensity_max']}"
             )
+            desc = (f.get("mode_description") or "").strip()
+            if desc:
+                indented = "\n".join("    " + line for line in desc.splitlines() if line.strip())
+                if indented:
+                    lines.append("  模式描述:")
+                    lines.append(indented)
         return "可用功能:\n" + "\n".join(lines)
 
     async def terminate(self):
