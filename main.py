@@ -3,6 +3,8 @@ import json
 import threading
 import socket
 import html
+import secrets
+import hmac
 from aiohttp import web
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.star import Context, Star, register
@@ -699,6 +701,130 @@ window.addEventListener('load', () => {
 </html>"""
 
 
+LOGIN_HTML_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TOY_TITLE__ · 登录</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --font-serif:'Cormorant Garamond','Songti SC','Noto Serif SC',Georgia,serif;
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#FCFAFF;--bg-2:#F7F4FB;--bg-3:#FFF8F9;
+  --glow-1:#C4A8E0;--glow-2:#EFB7C9;
+  --text:#5C4B66;--text-strong:#4A3A55;
+  --muted:rgba(92,75,102,0.55);
+  --accent:#6D5A9C;--accent-soft:#8A76B8;--accent-glow:rgba(124,92,180,0.2);
+  --glass-bg:rgba(255,255,255,0.46);--glass-highlight:rgba(255,255,255,0.9);
+  --surface:rgba(255,255,255,0.4);
+  --line:rgba(92,75,102,0.12);
+  --danger:#C96A6A;
+  --card-shadow:0 14px 50px rgba(92,75,102,0.09);
+}
+[data-theme="dark"]{
+  --bg:#17171A;--bg-2:#1C1A20;--bg-3:#201A1E;
+  --glow-1:#5B4A7A;--glow-2:#7A4A5E;
+  --text:#E4CFD2;--text-strong:#F0DCDF;
+  --muted:rgba(228,207,210,0.5);
+  --accent:#D8B4B8;--accent-soft:#C99AA0;--accent-glow:rgba(216,180,184,0.2);
+  --glass-bg:rgba(255,255,255,0.035);--glass-highlight:rgba(255,255,255,0.05);
+  --surface:rgba(255,255,255,0.035);
+  --line:rgba(255,255,255,0.07);
+  --danger:#E28B8B;
+  --card-shadow:0 16px 54px rgba(0,0,0,0.52);
+}
+body{
+  font-family:var(--font-sans);color:var(--text);min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;gap:16px;position:relative;overflow-x:hidden;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,var(--bg-2),transparent 70%),
+    radial-gradient(ellipse 70% 50% at 80% 100%,var(--bg-3),transparent 70%),
+    var(--bg);
+}
+body::before,body::after{
+  content:"";position:fixed;border-radius:50%;filter:blur(90px);opacity:.5;z-index:-1;
+}
+body::before{width:380px;height:380px;background:var(--glow-1);top:-100px;left:-80px}
+body::after{width:340px;height:340px;background:var(--glow-2);bottom:-110px;right:-90px}
+h1{
+  font-family:var(--font-serif);
+  font-size:2em;font-weight:600;letter-spacing:.5px;color:var(--text-strong);
+  margin-bottom:6px;
+}
+.card{
+  width:100%;max-width:360px;padding:28px 24px;border-radius:26px;
+  background:var(--glass-bg);border:1px solid var(--glass-highlight);
+  backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);
+  box-shadow:var(--card-shadow);
+  display:flex;flex-direction:column;gap:14px;
+}
+.hint{font-size:.85em;color:var(--muted);text-align:center;line-height:1.5}
+input[type="password"]{
+  width:100%;padding:13px 16px;border-radius:14px;
+  background:var(--surface);border:1px solid var(--line);
+  color:var(--text-strong);font-size:1em;font-family:var(--font-sans);
+  outline:none;transition:border-color .2s,box-shadow .2s;
+}
+input[type="password"]:focus{border-color:var(--accent-soft);box-shadow:0 0 0 3px var(--accent-glow)}
+button{
+  width:100%;padding:13px 20px;border:none;border-radius:999px;
+  font-size:1.05em;font-weight:600;letter-spacing:.5px;
+  font-family:var(--font-serif);cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent-soft));color:#fff;
+  box-shadow:0 8px 26px var(--accent-glow);
+  transition:transform .15s,box-shadow .3s;
+}
+button:hover{box-shadow:0 12px 36px var(--accent-glow)}
+button:active{transform:scale(.97)}
+button[disabled]{opacity:.5;cursor:not-allowed}
+.msg{min-height:1.2em;text-align:center;font-size:.9em;color:var(--danger)}
+</style>
+</head>
+<body>
+<h1>__TOY_TITLE__</h1>
+<form class="card" id="loginForm" onsubmit="return doLogin(event)">
+  <div class="hint">请输入访问密码</div>
+  <input type="password" id="pwd" name="password" autocomplete="current-password" autofocus>
+  <button type="submit" id="submitBtn">进入</button>
+  <div class="msg" id="msg">__ERROR_MSG__</div>
+</form>
+<script>
+async function doLogin(ev){
+  ev.preventDefault();
+  const pwd = document.getElementById('pwd').value;
+  const btn = document.getElementById('submitBtn');
+  const msg = document.getElementById('msg');
+  btn.disabled = true;
+  msg.textContent = '';
+  try{
+    const res = await fetch('/login', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: pwd})
+    });
+    const data = await res.json().catch(() => ({}));
+    if(res.ok && data.ok){
+      window.location.href = '/';
+    } else {
+      msg.textContent = (data && data.error) || '登录失败';
+      btn.disabled = false;
+    }
+  } catch(e){
+    msg.textContent = '网络错误: ' + e.message;
+    btn.disabled = false;
+  }
+  return false;
+}
+</script>
+</body>
+</html>"""
+
 
 def _normalize_functions(raw):
     """校验并归一化 functions 列表。允许部分字段缺失，给出合理默认。丢弃 __template_key 等平台元数据。"""
@@ -764,6 +890,10 @@ class ToyBLEPlugin(Star):
         self.runner = None
         self.site = None
         self._sock = None
+        # 访问控制：会话 token 集合 + 登录失败计数（重启即清空）
+        self._sessions = set()
+        self._login_attempts = {}  # ip -> {"count": int, "locked_until": float}
+        self._auth_lock = threading.Lock()
         self._load_toy_config()
 
     def _load_toy_config(self):
@@ -780,6 +910,8 @@ class ToyBLEPlugin(Star):
             self.port = int(g("port", 5122))
         except (TypeError, ValueError):
             self.port = 5122
+        # 密码：strip 后为空视为未设置
+        self.access_password = str(g("access_password", "") or "").strip()
         self.toy_name = str(g("toy_name", "BLE Toy")) or "BLE Toy"
         self.service_uuid = str(g("service_uuid", "0xFFE0")) or "0xFFE0"
         self.write_char_uuid = str(g("write_characteristic_uuid", "0xFFE1")) or "0xFFE1"
@@ -842,8 +974,23 @@ class ToyBLEPlugin(Star):
                 pass
             self._sock = None
 
-        app = web.Application()
+        if not self.access_password:
+            logger.error(
+                "[toy_ble_control] 未设置访问密码 (access_password)，出于安全考虑 HTTP 中继服务未启动。"
+                "请到插件配置里填写密码后重新加载插件。"
+            )
+            return
+
+        # 每次启动重置会话与失败计数
+        with self._auth_lock:
+            self._sessions.clear()
+            self._login_attempts.clear()
+
+        app = web.Application(middlewares=[self._auth_middleware])
         app.router.add_get("/", self._handle_relay_page)
+        app.router.add_get("/login", self._handle_login_page)
+        app.router.add_post("/login", self._handle_login_submit)
+        app.router.add_post("/logout", self._handle_logout)
         app.router.add_get("/state", self._handle_get_state)
         app.router.add_post("/state", self._handle_set_state)
         app.router.add_get("/config", self._handle_get_config)
@@ -898,6 +1045,109 @@ class ToyBLEPlugin(Star):
             "name_filter_prefix": self.name_filter_prefix,
             "functions": self.functions,
         })
+
+    # --- 认证相关 ---
+    COOKIE_NAME = "toy_session"
+    MAX_ATTEMPTS = 5
+    LOCK_SECONDS = 60
+
+    def _client_ip(self, request):
+        try:
+            peer = request.transport.get_extra_info("peername") if request.transport else None
+            if peer:
+                return peer[0]
+        except Exception:
+            pass
+        return request.remote or "unknown"
+
+    def _is_authed(self, request):
+        token = request.cookies.get(self.COOKIE_NAME)
+        if not token:
+            return False
+        with self._auth_lock:
+            return token in self._sessions
+
+    @web.middleware
+    async def _auth_middleware(self, request, handler):
+        # 登录相关路径直接放行
+        if request.path in ("/login",):
+            return await handler(request)
+        if self._is_authed(request):
+            return await handler(request)
+        # 未登录：HTML 请求跳登录页，其他返回 401 JSON
+        accept = request.headers.get("Accept", "")
+        if request.method == "GET" and "text/html" in accept:
+            raise web.HTTPFound("/login")
+        return web.json_response({"error": "unauthorized"}, status=401)
+
+    async def _handle_login_page(self, request):
+        if self._is_authed(request):
+            raise web.HTTPFound("/")
+        title = html.escape(self.toy_name or "BLE Toy")
+        page = (LOGIN_HTML_TEMPLATE
+                .replace("__TOY_TITLE__", title)
+                .replace("__ERROR_MSG__", ""))
+        return web.Response(text=page, content_type="text/html", charset="utf-8")
+
+    async def _handle_login_submit(self, request):
+        ip = self._client_ip(request)
+        now = time.time()
+        # 检查锁定
+        with self._auth_lock:
+            rec = self._login_attempts.get(ip)
+            if rec and rec.get("locked_until", 0) > now:
+                remain = int(rec["locked_until"] - now)
+                return web.json_response(
+                    {"error": f"尝试次数过多，请 {remain} 秒后再试"},
+                    status=429,
+                )
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        pwd = str(body.get("password", "") or "")
+
+        expected = self.access_password or ""
+        # 常量时间比较
+        ok = bool(expected) and hmac.compare_digest(pwd.encode("utf-8"), expected.encode("utf-8"))
+
+        if not ok:
+            with self._auth_lock:
+                rec = self._login_attempts.setdefault(ip, {"count": 0, "locked_until": 0.0})
+                rec["count"] += 1
+                if rec["count"] >= self.MAX_ATTEMPTS:
+                    rec["locked_until"] = now + self.LOCK_SECONDS
+                    rec["count"] = 0
+                    logger.warning(f"[toy_ble_control] IP {ip} 登录失败次数过多，已锁定 {self.LOCK_SECONDS}s")
+            return web.json_response({"error": "密码错误"}, status=401)
+
+        # 登录成功：生成 token
+        token = secrets.token_urlsafe(32)
+        with self._auth_lock:
+            self._sessions.add(token)
+            self._login_attempts.pop(ip, None)
+
+        resp = web.json_response({"ok": True})
+        # 注意：本地/局域网 HTTP 场景不启用 Secure；如果你用 HTTPS 反代请自行加 Secure 标记
+        resp.set_cookie(
+            self.COOKIE_NAME,
+            token,
+            httponly=True,
+            samesite="Lax",
+            path="/",
+            max_age=7 * 24 * 3600,
+        )
+        return resp
+
+    async def _handle_logout(self, request):
+        token = request.cookies.get(self.COOKIE_NAME)
+        if token:
+            with self._auth_lock:
+                self._sessions.discard(token)
+        resp = web.json_response({"ok": True})
+        resp.del_cookie(self.COOKIE_NAME, path="/")
+        return resp
 
     # --- LLM 工具 ---
     @llm_tool(name="toy_ble_set")
