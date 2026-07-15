@@ -1,5 +1,9 @@
 # 通用 BLE 玩具远程控制插件（toy_ble_control）
 
+<p align="center">
+  <img src="icon.png" width="140" alt="toy_ble_control icon" />
+</p>
+
 基于 AstrBot 的蓝牙玩具远程控制插件，通过 Web Bluetooth API 实现跨设备控制。**所有 UUID、指令格式、功能定义均可通过配置文件填写**，可适配 Svakom、Lovense（BLE 型号）、Magic Motion、Kiiroo 等任意基于 GATT 写入的 BLE 玩具。
 
 > **第一次配置不会填？** 直接跳到 [五、如何探测自己玩具的协议](#五如何探测自己玩具的协议首次配置必读)。那一节告诉你怎么用 nRF Connect 一步步抓出 UUID 和指令字节。

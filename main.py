@@ -282,6 +282,7 @@ button:active{transform:scale(.96)}
 .panel-hint{font-size:.8em;color:var(--caption);text-align:center;margin:2px 0 6px}
 .mode-desc{margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:.82em;line-height:1.55;color:var(--muted);white-space:pre-wrap;word-break:break-word}.mode-desc .mode-desc-label{display:block;font-size:.75em;color:var(--caption);letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase}.panel-empty{text-align:center;color:var(--muted);font-size:.9em;padding:20px}
 </style>
+<link rel="apple-touch-icon" href="/icon.png">
 </head>
 <body>
 <button id="themeToggle" onclick="toggleTheme()" title="切换主题"><span class="moon">🌙</span><span class="sun">☀️</span></button>
@@ -785,6 +786,7 @@ button:active{transform:scale(.97)}
 button[disabled]{opacity:.5;cursor:not-allowed}
 .msg{min-height:1.2em;text-align:center;font-size:.9em;color:var(--danger)}
 </style>
+<link rel="apple-touch-icon" href="/icon.png">
 </head>
 <body>
 <h1>__TOY_TITLE__</h1>
@@ -994,6 +996,7 @@ class ToyBLEPlugin(Star):
         app.router.add_get("/state", self._handle_get_state)
         app.router.add_post("/state", self._handle_set_state)
         app.router.add_get("/config", self._handle_get_config)
+        app.router.add_get("/icon.png", self._handle_icon)
 
         self.runner = web.AppRunner(app)
         await self.runner.setup()
@@ -1032,6 +1035,17 @@ class ToyBLEPlugin(Star):
         else:
             _stop_function(func or "all")
         return web.json_response({"ok": True})
+
+    async def _handle_icon(self, request):
+        import os
+        from aiohttp import web
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(plugin_dir, "icon-512.png")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(plugin_dir, "icon.png")
+        if os.path.exists(icon_path):
+            return web.FileResponse(icon_path)
+        return web.Response(status=404)
 
     async def _handle_get_config(self, request):
         """暴露给前端 / 调试用：返回当前生效的玩具配置（不含端口）。"""
